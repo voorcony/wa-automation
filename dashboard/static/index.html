@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WA Automation Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+  * { font-family: 'Inter', sans-serif; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .status-dot.green { background: #22c55e; box-shadow: 0 0 8px #22c55e88; }
+  .status-dot.red { background: #ef4444; box-shadow: 0 0 8px #ef444488; }
+  .status-dot.yellow { background: #eab308; box-shadow: 0 0 8px #eab30888; }
+  .status-dot.gray { background: #6b7280; }
+  .toast { position: fixed; top: 20px; right: 20px; z-index: 9999; transition: all 0.3s; }
+  .log-panel { height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 13px; }
+  .log-panel::-webkit-scrollbar { width: 6px; }
+  .log-panel::-webkit-scrollbar-track { background: #1e293b; }
+  .log-panel::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+  .card { background: #1e293b; border-radius: 12px; border: 1px solid #334155; transition: border-color 0.2s; }
+  .card:hover { border-color: #3b82f6; }
+  .glow { animation: pulse 2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+</style>
+</head>
+<body class="bg-[#0f172a] text-gray-100 min-h-screen">
+
+<div id="toast" class="toast hidden"></div>
+
+<div class="max-w-7xl mx-auto px-4 py-6">
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-8">
+    <div>
+      <h1 class="text-2xl font-bold text-white">🤖 WA Automation Dashboard</h1>
+      <p class="text-sm text-gray-400 mt-1" id="sysTime">Loading...</p>
+    </div>
+    <div class="flex items-center gap-4">
+      <label class="flex items-center gap-2 text-sm text-gray-300">
+        <input type="checkbox" id="autoRefresh" checked class="rounded bg-gray-700 border-gray-600">
+        Auto-refresh (10s)
+      </label>
+      <button onclick="refreshAll()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition">↻ Refresh</button>
+    </div>
+  </div>
+
+  <!-- Stat Cards -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="card p-5">
+      <div class="text-gray-400 text-sm mb-1">Total Accounts</div>
+      <div class="text-3xl font-bold text-blue-400" id="statTotal">-</div>
+    </div>
+    <div class="card p-5">
+      <div class="text-gray-400 text-sm mb-1">Online</div>
+      <div class="text-3xl font-bold text-emerald-400" id="statOnline">-</div>
+    </div>
+    <div class="card p-5">
+      <div class="text-gray-400 text-sm mb-1">Offline</div>
+      <div class="text-3xl font-bold text-rose-400" id="statOffline">-</div>
+    </div>
+    <div class="card p-5">
+      <div class="text-gray-400 text-sm mb-1">Messages Today</div>
+      <div class="text-3xl font-bold text-purple-400" id="statMessages">0</div>
+    </div>
+  </div>
+
+  <!-- Health Badges -->
+  <div class="card p-4 mb-6">
+    <div class="text-sm text-gray-400 mb-3 font-medium">System Health</div>
+    <div class="flex flex-wrap gap-6">
+      <div class="flex items-center gap-2"><span class="status-dot gray" id="badgeAdspower"></span><span id="txtAdspower" class="text-sm">AdsPower: checking...</span></div>
+      <div class="flex items-center gap-2"><span class="status-dot gray" id="badgeRedis"></span><span id="txtRedis" class="text-sm">Redis: checking...</span></div>
+      <div class="flex items-center gap-2"><span class="status-dot gray" id="badgeAi"></span><span id="txtAi" class="text-sm">AI Engine: checking...</span></div>
+      <div class="flex items-center gap-2"><span class="status-dot gray" id="badgeOrch"></span><span id="txtOrch" class="text-sm">Orchestrator: checking...</span></div>
+    </div>
+  </div>
+
+  <!-- Accounts Table -->
+  <div class="card mb-6">
+    <div class="p-4 border-b border-gray-700 flex items-center justify-between">
+      <h2 class="font-semibold">📋 Accounts</h2>
+      <button onclick="toggleForm()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-sm transition">+ Add Account</button>
+    </div>
+
+    <!-- Add Account Form (collapsible) -->
+    <div id="addForm" class="hidden p-4 border-b border-gray-700 bg-[#1a2332]">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <input id="inputName" placeholder="Account Name" class="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+        <input id="inputProxy" placeholder="Proxy (e.g. http://user:pass@host:port)" class="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+        <button onclick="addAccount()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition">Submit</button>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-gray-400 border-b border-gray-700">
+            <th class="text-left px-4 py-3 font-medium">#</th>
+            <th class="text-left px-4 py-3 font-medium">Name</th>
+            <th class="text-left px-4 py-3 font-medium">User ID</th>
+            <th class="text-left px-4 py-3 font-medium">Status</th>
+            <th class="text-left px-4 py-3 font-medium">PID</th>
+            <th class="text-left px-4 py-3 font-medium">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="accountsBody">
+          <tr><td colspan="6" class="text-center text-gray-500 py-8">Loading accounts...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Activity Log -->
+  <div class="card">
+    <div class="p-4 border-b border-gray-700">
+      <h2 class="font-semibold">📜 Activity Log</h2>
+    </div>
+    <div class="log-panel p-4 bg-[#0c1929]" id="logPanel">
+      <div class="text-gray-500 text-center py-4">Waiting for activity...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============ STATE ============
+let accounts = [];
+let refreshInterval = null;
+const API_BASE = '';
+
+// ============ TOAST ============
+function showToast(msg, type='error') {
+  const el = document.getElementById('toast');
+  el.className = `toast px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${type === 'error' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'}`;
+  el.textContent = msg;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 4000);
+}
+
+// ============ CLOCK ============
+function updateClock() {
+  document.getElementById('sysTime').textContent = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+}
+setInterval(updateClock, 1000);
+
+// ============ LOG ============
+function addLog(msg) {
+  const panel = document.getElementById('logPanel');
+  const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+  const div = document.createElement('div');
+  div.className = 'text-gray-300';
+  div.innerHTML = `<span class="text-gray-500">[${time}]</span> ${msg}`;
+  panel.appendChild(div);
+  panel.scrollTop = panel.scrollHeight;
+  // Keep last 100 lines
+  while (panel.children.length > 100) panel.removeChild(panel.firstChild);
+}
+
+// ============ STATUS BADGES ============
+function setBadge(id, text, ok) {
+  document.getElementById(id).className = `status-dot ${ok ? 'green' : 'red'}`;
+}
+
+// ============ AGGREGATED STATUS ============
+async function fetchStatus() {
+  try {
+    const r = await fetch(`${API_BASE}/api/status`);
+    if (!r.ok) throw new Error('Status API error');
+    const data = await r.json();
+    
+    // Health badges
+    const orch = data.orchestrator;
+    const ai = data.ai_engine;
+    
+    setBadge('badgeOrch', '', orch?.status === 'ok' || orch?.status === 'healthy');
+    document.getElementById('txtOrch').textContent = `Orchestrator: ${orch?.status || 'unknown'}`;
+    
+    setBadge('badgeAi', '', ai?.status === 'ok');
+    const prodCount = ai?.products_loaded || 0;
+    document.getElementById('txtAi').textContent = `AI Engine: ${ai?.status || 'unknown'} (${prodCount} products)`;
+    
+    // AdsPower & Redis from orchestrator if available
+    const ads = orch?.adspower || {};
+    setBadge('badgeAdspower', '', ads?.running || false);
+    document.getElementById('txtAdspower').textContent = `AdsPower: ${ads?.running ? 'Running' : 'Unknown'}`;
+    
+    const redis = orch?.redis || {};
+    setBadge('badgeRedis', '', redis?.connected || false);
+    document.getElementById('txtRedis').textContent = `Redis: ${redis?.connected ? 'Connected' : 'Unknown'}`;
+    
+    addLog('System status refreshed');
+    return data;
+  } catch(e) {
+    console.error('Status fetch error:', e);
+    return null;
+  }
+}
+
+// ============ ACCOUNTS ============
+async function fetchAccounts() {
+  try {
+    const r = await fetch(`${API_BASE}/api/orchestrator/status`);
+    if (!r.ok) throw new Error('Accounts API error');
+    const data = await r.json();
+    accounts = Array.isArray(data) ? data : data.accounts || [];
+    renderAccounts();
+    updateStats();
+    addLog(`Loaded ${accounts.length} accounts`);
+    return accounts;
+  } catch(e) {
+    console.error('Accounts fetch error:', e);
+    document.getElementById('accountsBody').innerHTML = `<tr><td colspan="6" class="text-center text-rose-400 py-8">Failed to load accounts: ${e.message}</td></tr>`;
+    return [];
+  }
+}
+
+function renderAccounts() {
+  const tbody = document.getElementById('accountsBody');
+  if (!accounts.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-gray-500 py-8">No accounts configured</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = accounts.map((a, i) => {
+    const state = a.state || a.status || 'stopped';
+    const statusColors = { running: 'bg-emerald-500/20 text-emerald-300', stopped: 'bg-gray-500/20 text-gray-300', error: 'bg-rose-500/20 text-rose-300', starting: 'bg-amber-500/20 text-amber-300', creating: 'bg-amber-500/20 text-amber-300' };
+    const color = statusColors[state] || statusColors.stopped;
+    const uid = a.user_id || a.name || `acct_${i+1}`;
+    return `<tr class="border-b border-gray-700/50 hover:bg-white/5">
+      <td class="px-4 py-3 text-gray-400">${i+1}</td>
+      <td class="px-4 py-3 font-medium">${a.name || uid}</td>
+      <td class="px-4 py-3 text-gray-400 text-xs">${uid}</td>
+      <td class="px-4 py-3"><span class="px-2.5 py-1 rounded-full text-xs font-medium ${color}">${state}</span></td>
+      <td class="px-4 py-3 text-gray-400 text-xs">${a.pid || '-'}</td>
+      <td class="px-4 py-3">
+        <div class="flex gap-1">
+          ${state !== 'running' ? `<button onclick="controlAccount('${uid}','start')" class="px-2 py-1 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 rounded text-xs transition">▶</button>` : ''}
+          ${state === 'running' ? `<button onclick="controlAccount('${uid}','stop')" class="px-2 py-1 bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 rounded text-xs transition">⏹</button>` : ''}
+          <button onclick="deleteAccount('${uid}')" class="px-2 py-1 bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 rounded text-xs transition">🗑</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function updateStats() {
+  const total = accounts.length;
+  const online = accounts.filter(a => (a.state || a.status) === 'running').length;
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('statOnline').textContent = online;
+  document.getElementById('statOffline').textContent = total - online;
+}
+
+// ============ ACTIONS ============
+async function controlAccount(uid, action) {
+  addLog(`${action} account: ${uid}`);
+  showToast(`${action}ing ${uid}...`, 'info');
+  try {
+    // For start, we POST to /api/orchestrator/accounts
+    // For stop, we might need a different endpoint
+    if (action === 'start') {
+      const r = await fetch(`${API_BASE}/api/orchestrator/accounts`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: uid})
+      });
+      if (!r.ok) throw new Error(`Start failed: ${r.status}`);
+    }
+    showToast(`${action} request sent`, 'info');
+    await fetchAccounts();
+  } catch(e) {
+    showToast(`Failed to ${action}: ${e.message}`);
+  }
+}
+
+async function deleteAccount(uid) {
+  if (!confirm(`Delete account ${uid}?`)) return;
+  addLog(`Deleting account: ${uid}`);
+  try {
+    const r = await fetch(`${API_BASE}/api/orchestrator/accounts/${encodeURIComponent(uid)}`, {method: 'DELETE'});
+    if (!r.ok) throw new Error(`Delete failed: ${r.status}`);
+    showToast('Account deleted', 'info');
+    await fetchAccounts();
+  } catch(e) {
+    showToast(`Delete failed: ${e.message}`);
+  }
+}
+
+function toggleForm() {
+  document.getElementById('addForm').classList.toggle('hidden');
+}
+
+async function addAccount() {
+  const name = document.getElementById('inputName').value.trim();
+  const proxy = document.getElementById('inputProxy').value.trim();
+  if (!name) { showToast('Name is required'); return; }
+  
+  const body = {name};
+  if (proxy) body.proxy = proxy;
+  
+  addLog(`Adding account: ${name}`);
+  try {
+    const r = await fetch(`${API_BASE}/api/orchestrator/accounts`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error(`Add failed: ${r.status}`);
+    const data = await r.json();
+    showToast(`Account ${name} added!`, 'info');
+    document.getElementById('inputName').value = '';
+    document.getElementById('inputProxy').value = '';
+    document.getElementById('addForm').classList.add('hidden');
+    await fetchAccounts();
+  } catch(e) {
+    showToast(`Failed to add: ${e.message}`);
+  }
+}
+
+// ============ REFRESH ============
+async function refreshAll() {
+  await Promise.all([fetchStatus(), fetchAccounts()]);
+}
+
+// ============ AUTO REFRESH ============
+document.getElementById('autoRefresh').addEventListener('change', function() {
+  if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; }
+  if (this.checked) refreshInterval = setInterval(refreshAll, 10000);
+});
+
+// ============ INIT ============
+refreshAll().then(() => {
+  if (document.getElementById('autoRefresh').checked) {
+    refreshInterval = setInterval(refreshAll, 10000);
+  }
+  addLog('Dashboard initialized');
+});
+</script>
+</body>
+</html>
