@@ -1,0 +1,115 @@
+# =============================================================================
+# WA Auto-Reply System - Global Configuration
+# =============================================================================
+# All components (ads, wa-worker, ai-engine, orchestrator) read from this file.
+# Secrets (API keys, tokens) should be supplied via environment variables and
+# are interpolated using ${VAR_NAME} or ${VAR_NAME:-default} syntax where the
+# loader supports it. Never commit real secrets to this file.
+# =============================================================================
+
+app:
+  name: wa-automation
+  env: ${APP_ENV:-development}        # development | staging | production
+  log_level: ${LOG_LEVEL:-INFO}       # DEBUG | INFO | WARNING | ERROR
+  timezone: Asia/Singapore
+
+# -----------------------------------------------------------------------------
+# AdsPower Local API
+# -----------------------------------------------------------------------------
+# AdsPower must be running locally. The Local API listens on 127.0.0.1:50325
+# by default. Get your api_key from: AdsPower app -> Settings -> API.
+# -----------------------------------------------------------------------------
+adspower:
+  base_url: ${ADSPOWER_BASE_URL:-http://127.0.0.1:50325}
+  api_key: ${ADSPOWER_API_KEY:-}
+  group_name: wa-auto
+  open_urls:
+    - https://web.whatsapp.com
+  # HTTP client tuning
+  request_timeout: 30.0               # seconds, per HTTP request
+  start_timeout: 90.0                 # seconds, browser cold-start can be slow
+  max_retries: 3
+  retry_backoff: 1.5                  # exponential backoff base (seconds)
+  # Rate limit: AdsPower Local API allows ~1 req/sec
+  min_request_interval: 1.0
+
+# -----------------------------------------------------------------------------
+# WhatsApp Worker
+# -----------------------------------------------------------------------------
+wa_worker:
+  host: 0.0.0.0
+  port: 8081
+  # Where session metadata is persisted (QR scan state, last-seen, etc.)
+  state_dir: ./data/wa-sessions
+  # Polling intervals
+  message_poll_interval: 2.0          # seconds
+  presence_update_interval: 30.0
+  # Safety limits
+  max_messages_per_minute: 20
+  max_messages_per_hour: 300
+  typing_delay_min: 1.5                # seconds, simulate human typing
+  typing_delay_max: 4.0
+
+# -----------------------------------------------------------------------------
+# AI Engine
+# -----------------------------------------------------------------------------
+ai_engine:
+  host: 0.0.0.0
+  port: 8082
+  provider: ${AI_PROVIDER:-deepseek}
+  deepseek:
+    api_key: ${DEEPSEEK_API_KEY:-}
+    api_base: https://api.deepseek.com/v1
+    model: deepseek-chat
+    temperature: 0.7
+    max_tokens: 1024
+  # Conversation memory
+  context_window: 20                  # last N messages kept in prompt
+  reply_timeout: 30.0
+
+# -----------------------------------------------------------------------------
+# Feishu (Lark) Product Database
+# -----------------------------------------------------------------------------
+feishu:
+  app_id: ${FEISHU_APP_ID:-cli_a9619830e2fadcd1}
+  app_secret: ${FEISHU_APP_SECRET:-kXdwL8yJZCDo9kwych0npgZ5W078RRkK}
+  app_token: ${FEISHU_APP_TOKEN:-G5sbb3W1qa74TJs2aqrcg03EnVg}
+  table_id: ${FEISHU_TABLE_ID:-tblfFvFg7P1ozXFq}
+  sync_interval: 3600                 # seconds between product syncs
+
+# -----------------------------------------------------------------------------
+# Orchestrator
+# -----------------------------------------------------------------------------
+orchestrator:
+  host: 0.0.0.0
+  port: 8080
+  wa_worker_url: http://localhost:8081
+  ai_engine_url: http://localhost:8082
+  # How many AdsPower profiles to manage concurrently
+  max_concurrent_profiles: 5
+  health_check_interval: 60.0
+
+# -----------------------------------------------------------------------------
+# Storage
+# -----------------------------------------------------------------------------
+database:
+  url: ${DATABASE_URL:-sqlite:///./data/wa-automation.db}
+  pool_size: 5
+  echo: false
+
+redis:
+  url: ${REDIS_URL:-redis://localhost:6379/0}
+  # Used for inter-service queues and rate-limit counters
+
+# -----------------------------------------------------------------------------
+# Observability
+# -----------------------------------------------------------------------------
+logging:
+  format: json                        # json | text
+  file: ./logs/wa-automation.log
+  rotate_max_bytes: 10485760          # 10 MiB
+  rotate_backup_count: 5
+
+metrics:
+  enabled: true
+  prometheus_port: 9090

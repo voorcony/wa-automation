@@ -1,0 +1,3 @@
+# AdsPower manager dependencies
+httpx>=0.27.0,<1.0
+PyYAML>=6.0,<7.0
