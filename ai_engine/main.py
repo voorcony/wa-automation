@@ -17,10 +17,10 @@ import yaml
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from .product_store import ProductStore
-from .deepseek_client import DeepSeekClient
-from .rag import RAGEngine
-from . import prompts  # noqa: F401  (re-exported for downstream consumers)
+from product_store import ProductStore
+from deepseek_client import DeepSeekClient
+from rag import RAGEngine
+import prompts  # noqa: F401  (re-exported for downstream consumers)
 
 logger = logging.getLogger(__name__)
 

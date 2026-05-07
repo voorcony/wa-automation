@@ -36,6 +36,7 @@ ORCHESTRATOR_URL = os.environ.get("ORCHESTRATOR_URL", "http://localhost:8080").r
 AI_ENGINE_URL = os.environ.get("AI_ENGINE_URL", "http://localhost:8082").rstrip("/")
 DASHBOARD_HOST = os.environ.get("DASHBOARD_HOST", "0.0.0.0")
 DASHBOARD_PORT = int(os.environ.get("DASHBOARD_PORT", "8086"))
+WA_WORKER_URL = os.environ.get("WA_WORKER_URL", "http://localhost:8083").rstrip("/")
 PROXY_TIMEOUT = float(os.environ.get("DASHBOARD_PROXY_TIMEOUT", "30"))
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -224,6 +225,14 @@ async def proxy_orchestrator(path: str, request: Request) -> Response:
 )
 async def proxy_ai(path: str, request: Request) -> Response:
     return await _proxy(request, AI_ENGINE_URL, path)
+
+
+@app.api_route(
+    "/api/wa/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+)
+async def proxy_wa(path: str, request: Request) -> Response:
+    return await _proxy(request, WA_WORKER_URL, path)
 
 
 @app.get("/healthz")

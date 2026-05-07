@@ -240,6 +240,30 @@
     </div>
   </section>
 
+  <!-- WhatsApp QR Code -->
+  <section class="rounded-xl border border-line bg-panel/70 mb-6 overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-line">
+      <h2 class="text-base font-semibold text-white">WhatsApp Login</h2>
+      <span class="text-xs text-slate-400" id="qrMeta">Checking...</span>
+    </div>
+    <div class="flex flex-col items-center justify-center py-6 px-5">
+      <div id="qrContainer" class="bg-white rounded-xl p-3 shadow-lg mb-3 hidden">
+        <img id="qrImage" src="" alt="WhatsApp QR Code" class="w-56 h-56" />
+      </div>
+      <div id="qrWaiting" class="text-slate-400 text-sm py-8">
+        <svg class="animate-spin inline-block w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+        Waiting for QR code...
+      </div>
+      <div id="qrConnected" class="text-emerald-400 text-sm py-8 hidden">
+        ✅ Connected to WhatsApp
+      </div>
+      <div id="qrError" class="text-amber-400 text-sm py-8 hidden">
+        ⏳ Initializing...
+      </div>
+      <p class="text-xs text-slate-500 mt-2">Open WhatsApp → Linked Devices → Scan QR</p>
+    </div>
+  </section>
+
   <!-- Activity Log -->
   <section class="rounded-xl border border-line bg-panel/70 overflow-hidden">
     <div class="flex items-center justify-between px-5 py-4 border-b border-line">
@@ -267,6 +291,7 @@
   // Helpers
   // -------------------------------------------------------------------------
   const $  = (id) => document.getElementById(id);
+  const API_BASE = '/dashboard';
   const fmtTime = (d = new Date()) => d.toTimeString().slice(0, 8);
 
   const REFRESH_MS = 10_000;
@@ -374,7 +399,7 @@
 
   async function loadStatus() {
     try {
-      const s = await api('/api/status');
+      const s = await api(API_BASE + '/api/status');
 
       // ----- Orchestrator + counts (also drives AdsPower indirectly) ----------
       const orchOk = !!(s.orchestrator_health && s.orchestrator_health.ok);
@@ -461,7 +486,7 @@
   async function loadAccounts() {
     const body = $('accountsBody');
     try {
-      const s = await api('/api/orchestrator/status');
+      const s = await api(API_BASE + '/api/orchestrator/status');
       const accounts = Array.isArray(s.accounts) ? s.accounts : [];
       $('accountsMeta').textContent =
         accounts.length === 0 ? 'No accounts' :
@@ -528,7 +553,7 @@
       if (!confirm(`Delete account ${uid}? This stops the worker and removes the AdsPower profile.`)) return;
       btn.disabled = true;
       try {
-        await api(`/api/orchestrator/accounts/${encodeURIComponent(uid)}`, { method: 'DELETE' });
+        await api(API_BASE + `/api/orchestrator/accounts/${encodeURIComponent(uid)}`, { method: 'DELETE' });
         toast(`Deleted ${uid}`, 'success');
         log(`Deleted account ${uid}`, 'success');
         await refreshAll();
@@ -544,7 +569,7 @@
     if (act === 'start' || act === 'stop') {
       btn.disabled = true;
       try {
-        await api(`/api/orchestrator/accounts/${encodeURIComponent(uid)}/${act}`, { method: 'POST' });
+        await api(API_BASE + `/api/orchestrator/accounts/${encodeURIComponent(uid)}/${act}`, { method: 'POST' });
         toast(`${act === 'start' ? 'Started' : 'Stopped'} ${uid}`, 'success');
         log(`${act} ${uid}: ok`, 'success');
         await refreshAll();
@@ -586,7 +611,7 @@
     btn.disabled = true;
     btn.textContent = 'Adding…';
     try {
-      const r = await api('/api/orchestrator/accounts', { method: 'POST', body });
+      const r = await api(API_BASE + '/api/orchestrator/accounts', { method: 'POST', body });
       const uid = (r && (r.user_id || (r.account && r.account.user_id))) || '?';
       toast(`Account "${name}" added (user_id=${uid})`, 'success');
       log(`Added account name=${name} user_id=${uid}`, 'success');
@@ -603,13 +628,55 @@
   });
 
   // -------------------------------------------------------------------------
-  // Refresh orchestration
+  // QR Code refresh
+  // -------------------------------------------------------------------------
+  async function refreshQr() {
+    const meta = $('qrMeta');
+    try {
+      const s = await api(API_BASE + '/api/wa/status');
+      if (!s) throw new Error('no response');
+      const state = String(s.state || '').toUpperCase();
+      const isReady = s.connected === true;
+
+      $('qrWaiting').classList.add('hidden');
+      $('qrConnected').classList.add('hidden');
+      $('qrError').classList.add('hidden');
+      $('qrContainer').classList.add('hidden');
+
+      if (isReady) {
+        $('qrConnected').classList.remove('hidden');
+        meta.textContent = 'Ready';
+        meta.className = 'text-xs text-emerald-400';
+      } else if (state === 'QR' || state === 'INITIALIZING' || state.startsWith('AUTH')) {
+        $('qrError').classList.remove('hidden');
+        $('qrError').textContent = '⏳ ' + state;
+        meta.textContent = state;
+        meta.className = 'text-xs text-amber-400';
+        // Try to load QR image
+        const img = $('qrImage');
+        img.src = API_BASE + '/api/wa/qr?' + Date.now();  // cache-bust
+        $('qrContainer').classList.remove('hidden');
+        $('qrWaiting').classList.add('hidden');
+      } else {
+        $('qrError').classList.remove('hidden');
+        $('qrError').textContent = '⏳ ' + state;
+        meta.textContent = state;
+        meta.className = 'text-xs text-slate-400';
+      }
+    } catch (e) {
+      meta.textContent = 'unreachable';
+      meta.className = 'text-xs text-red-400';
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Refresh all
   // -------------------------------------------------------------------------
   async function refreshAll() {
     if (inFlight) return;
     inFlight = true;
     try {
-      await Promise.all([loadStatus(), loadAccounts()]);
+      await Promise.all([loadStatus(), loadAccounts(), refreshQr()]);
     } finally {
       inFlight = false;
     }

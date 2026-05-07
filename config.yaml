@@ -21,7 +21,7 @@ app:
 # -----------------------------------------------------------------------------
 adspower:
   base_url: ${ADSPOWER_BASE_URL:-http://127.0.0.1:50325}
-  api_key: ${ADSPOWER_API_KEY:-}
+  api_key: 65b71a2ddccc6d97c55c5dee7a6b921400000120f3fc85b6
   group_name: wa-auto
   open_urls:
     - https://web.whatsapp.com

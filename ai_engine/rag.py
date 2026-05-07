@@ -2,8 +2,8 @@
 
 import logging
 
-from .product_store import ProductStore
-from .prompts import SYSTEM_PROMPT
+from product_store import ProductStore
+from prompts import SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
