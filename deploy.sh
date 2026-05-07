@@ -175,22 +175,11 @@ install_app_deps() {
 # Step 8: install AdsPower
 # ---------------------------------------------------------------------------
 install_adspower() {
-    log "Installing AdsPower Global on remote..."
+    log "Installing AdsPower CLI via npm..."
     remote_bash '
-        if command -v adspower_global >/dev/null 2>&1 || [ -d /opt/AdsPower ] || [ -d /opt/adspower-global-service ]; then
-            echo "AdsPower appears to already be installed; reinstalling to ensure latest version."
-        fi
-
-        wget -O /tmp/AdsPower.deb https://www.adspower.net/download/linux/AdsPower_Global_x86_64.deb
-
-        # dpkg may fail due to missing deps; apt-get install -f resolves them.
-        sudo dpkg -i /tmp/AdsPower.deb || true
-        sudo apt-get install -f -y
-
-        # Re-run dpkg in case -f only fixed deps without configuring our package.
-        sudo dpkg -i /tmp/AdsPower.deb
-
-        echo "AdsPower install finished."
+        sudo npm install -g adspower-browser 2>&1
+        echo "AdsPower CLI install finished."
+        echo "Run with: ads start --api-key YOUR_KEY --port 50325"
     '
 }
 
@@ -200,78 +189,34 @@ install_adspower() {
 install_systemd_services() {
     log "Installing systemd service units (adspower, orchestrator)..."
 
-    # Detect AdsPower binary path on the remote so the unit file is correct.
-    local adspower_bin
-    adspower_bin=$(remote_exec "
-        for c in \
-            /opt/AdsPower/adspower_global \
-            /opt/AdsPower/AdsPower \
-            /opt/adspower-global-service/adspower_global \
-            /usr/bin/adspower_global \
-            /usr/local/bin/adspower_global; do
-            if [ -x \"\$c\" ]; then echo \"\$c\"; exit 0; fi
-        done
-        # fallback: search
-        found=\$(command -v adspower_global 2>/dev/null || true)
-        if [ -n \"\$found\" ]; then echo \"\$found\"; exit 0; fi
-        found=\$(find /opt /usr/local/bin /usr/bin -maxdepth 4 -type f -iname 'adspower*' -executable 2>/dev/null | head -n1 || true)
-        echo \"\$found\"
-    " | tr -d '\r' | tail -n1)
-
-    if [[ -z "${adspower_bin}" ]]; then
-        warn "Could not auto-detect AdsPower binary path. Defaulting to /opt/AdsPower/adspower_global"
-        warn "You may need to edit /etc/systemd/system/adspower.service after deployment."
-        adspower_bin="/opt/AdsPower/adspower_global"
-    else
-        log "Detected AdsPower binary: ${adspower_bin}"
-    fi
-
-    # Detect orchestrator entry point.
-    local orch_cmd
-    orch_cmd=$(remote_exec "
-        if [ -f '${REMOTE_DIR}/orchestrator/main.py' ]; then
-            echo 'python3 main.py'
-        elif [ -f '${REMOTE_DIR}/orchestrator/app.py' ]; then
-            echo 'python3 app.py'
-        elif [ -f '${REMOTE_DIR}/orchestrator/run.py' ]; then
-            echo 'python3 run.py'
-        elif [ -f '${REMOTE_DIR}/orchestrator/__main__.py' ]; then
-            echo 'python3 -m orchestrator'
-        else
-            echo ''
-        fi
-    " | tr -d '\r' | tail -n1)
-
-    if [[ -z "${orch_cmd}" ]]; then
-        warn "No orchestrator entry point detected. Defaulting to 'python3 main.py'."
-        warn "Edit /etc/systemd/system/orchestrator.service ExecStart after you add the entry point."
-        orch_cmd="python3 main.py"
-    else
-        log "Detected orchestrator entry point: ${orch_cmd}"
-    fi
-
     local adspower_unit
     adspower_unit=$(cat <<UNIT
 [Unit]
-Description=AdsPower Global (headless)
+Description=AdsPower CLI (Headless)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=${REMOTE_USER}
-Environment=DISPLAY=:0
-Environment=HEADLESS=1
-ExecStart=${adspower_bin} --headless --no-sandbox
+ExecStart=/usr/bin/env ads start --api-key 65b71a2ddccc6d97c55c5dee7a6b921400000120f3fc85b6 --port 50325
 Restart=on-failure
 RestartSec=5
-StandardOutput=journal
-StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
 UNIT
 )
+
+    # Detect orchestrator entry point.
+    local orch_cmd
+    orch_cmd=$(remote_exec "
+        if [ -f '${REMOTE_DIR}/orchestrator/main.py' ]; then
+            echo 'python3 ${REMOTE_DIR}/orchestrator/main.py'
+        else
+            echo 'python3 ${REMOTE_DIR}/orchestrator/main.py'
+        fi
+    " | tr -d '\r' | tail -n1)
 
     local orchestrator_unit
     orchestrator_unit=$(cat <<UNIT
