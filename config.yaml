@@ -1,7 +1,7 @@
 # =============================================================================
 # WA Auto-Reply System - Global Configuration
 # =============================================================================
-# All components (ads, wa-worker, ai-engine, orchestrator) read from this file.
+# All components (ads, wa-worker, ai_engine, orchestrator) read from this file.
 # Secrets (API keys, tokens) should be supplied via environment variables and
 # are interpolated using ${VAR_NAME} or ${VAR_NAME:-default} syntax where the
 # loader supports it. Never commit real secrets to this file.
