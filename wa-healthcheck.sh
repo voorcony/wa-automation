@@ -4,7 +4,7 @@
 
 WA_DIR=/home/ubuntu/wa-automation
 WORKER_PORT=8083
-WINDOWS_IP=101.33.123.45
+WINDOWS_IP=43.155.1.195
 SSH_USER=administrator
 SSH_PASS=ZHOUjiahao1!
 ADSPOWER_API="http://$WINDOWS_IP:50325"

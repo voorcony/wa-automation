@@ -306,6 +306,9 @@ class AdsPowerManager:
             "fingerprint_config": fingerprint_config or {"automatic_timezone": "1"},
             # No proxy by default; pass an explicit config to use one.
             "user_proxy_config": proxy_config or {"proxy_soft": "no_proxy"},
+            # 窗口分辨率 1280x1080 — 减少截图传输量
+            "window_width": 1280,
+            "window_height": 1080,
         }
         if extra:
             body.update(extra)
